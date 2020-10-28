@@ -6,9 +6,7 @@ struct ElasticSearchConfig {
 }
 
 impl ElasticSearchConfig {
-    fn new() -> Self {
-        let app = App::new("writer").version("0.1").about("Bombards Elastic Search with batches of consolidated profiles or user IDs").author("Andrei Maximilian Diamandopol");
-
+    fn new(app: App) -> Self { 
         let es_host_arg = Arg::with_name("elasticsearch-host").long("elasticsearch-host").help("Elasticsearch server host").takes_value(true).required(true);
         let es_port_arg = Arg::with_name("elasticsearch-port").long("elasticsearch-port").help("Elasticsearch server port").takes_value(true).required(true);
         
@@ -25,7 +23,8 @@ impl ElasticSearchConfig {
 }
 
 fn main() {
-    let elastic_search_config = ElasticSearchConfig::new();
+    let app = App::new("writer").version("0.1").about("Bombards Elastic Search with batches of consolidated profiles or user IDs").author("Andrei Maximilian Diamandopol");
+    let elastic_search_config = ElasticSearchConfig::new(app);
     
     println!("Host: {} Port: {}", elastic_search_config.host, elastic_search_config.port); 
 }
