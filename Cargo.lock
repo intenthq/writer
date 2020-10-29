@@ -1388,6 +1388,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "elasticsearch",
+ "rand",
  "serde",
  "serde_json",
  "tokio",
