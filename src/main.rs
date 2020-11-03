@@ -1,13 +1,12 @@
 use clap::{Arg, App};
 use elasticsearch::{BulkParts, Elasticsearch, Error, http::{request::JsonBody, Url, transport::{SingleNodeConnectionPool, TransportBuilder}}};
-use serde::{ Serialize, Deserialize};
-use std::slice::Chunks;
 use rand::{distributions::Alphanumeric, Rng, thread_rng};
+use serde_json::{Value, json};
 
 struct ElasticSearchConfig {
-    host: String,
-    port: String
-  }
+  host: String,
+  port: String
+}
   
 impl ElasticSearchConfig {
   fn new(app: App) -> Self { 
@@ -25,29 +24,29 @@ impl ElasticSearchConfig {
     ElasticSearchConfig {host: host.to_string(), port: port.to_string()}
   }
 }
-#[derive(Debug, Deserialize, Serialize)]
-struct Message {
-  id: i32,
-  user: String,
-  message: String
+// #[derive(Debug, Deserialize, Serialize)]
+// struct Message {
+//   id: i32,
+//   user: String,
+//   message:  String
+// }
+
+fn generate_profile(id: i32) -> Value {
+    json!({"id": id, "user": get_random_username(), "message": get_random_message()})
 }
 
-fn generateProfile(id: i32) -> Message {
-    Message {id: id, user: getRandomUsername(), message: getRandomMessage()}
-}
-
-fn getRandomUsername() -> String {
+fn get_random_username() -> String {
   thread_rng()
   .sample_iter(&Alphanumeric)
   .take(10)
-  .collect()
+  .collect::<String>()
 }
 
-fn getRandomMessage() -> String {
+fn get_random_message() -> String {
   thread_rng()
   .sample_iter(&Alphanumeric)
   .take(30)
-  .collect()
+  .collect::<String>()
 }
 
 #[tokio::main]
@@ -63,21 +62,23 @@ async fn main() -> Result<(), Error> {
     let transport = TransportBuilder::new(conn_pool).disable_proxy().build()?;
     let client = Elasticsearch::new(transport);
 
-    let profiles_range: Vec<i32> = (1..100000).collect();
-
-    let batches: Chunks<Message> = profiles_range.into_iter()
-    .map(|id| {generateProfile(id)})
-    .collect::<Vec<Message>>()
-    .chunks(1000);
+    let profiles_range: Vec<i32> = (1..1000001).collect();
+    let batches = profiles_range.chunks(10000);
 
     for batch  in batches {
-      let mut p: Vec<JsonBody<Message>> = Vec::with_capacity(100);
-      for item in batch {
-        p.push(JsonBody::new(item));
+      let mut index_commands: Vec<JsonBody<Value>> = Vec::with_capacity(20000);
+      for id in batch {
+        index_commands.push(JsonBody::new(json!({"index": {"_index": "test-batch-size-10k-million","_id": *id, "_type": "_doc"}}).into()));
+        index_commands.push(JsonBody::new(generate_profile(*id)))
       }
-      let response = client.bulk(BulkParts::Index("test")).body(p).send().await?;
-      let successful = response.status_code().to_string();
-      println!("{}", successful);
+      //BulkParts::IndexType()
+      let req = client.bulk(BulkParts::IndexType("test-batch-size-10k-million", "_doc")).pretty(true).human(true).body(index_commands);
+      let before_response = req.send();
+      let response = before_response.await?;
+      match response.error_for_status_code(){
+       Ok(_) => println!("no complaints"),
+       Err(e) => println!("{}", e.to_string()),
+      }
     } 
 
     println!("Host: {} Port: {}", elastic_search_config.host, elastic_search_config.port);  
